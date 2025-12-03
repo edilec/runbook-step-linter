@@ -1,0 +1,17 @@
+{
+  "name": "runbook-step-linter",
+  "version": "0.0.0",
+  "description": "Lint runbook steps for commands, prerequisites, expected output and rollback.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edilec/runbook-step-linter"
+  }
+}
