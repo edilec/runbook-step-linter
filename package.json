@@ -1,17 +1,51 @@
 {
   "name": "runbook-step-linter",
-  "version": "0.0.0",
-  "description": "Lint runbook steps for commands, prerequisites, expected output and rollback.",
+  "version": "0.1.0",
+  "description": "Lint runbook steps for a named owner, prerequisites, a checkable expected output, a recovery path and unambiguous command boundaries, treating every command it finds as data.",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "lint": "node --check src/index.mjs && node --check src/parse.mjs && node --check src/rules.mjs && node --check bin/runbook-step-linter.mjs && node --check test/parse.test.mjs && node --check test/rules.test.mjs && node --check test/linter.test.mjs && node --check test/cli.test.mjs && node --check test/severity-table.test.mjs && node --check test/determinism.test.mjs && node --check test/no-execution.test.mjs",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**",
+    "example": "node bin/runbook-step-linter.mjs --root examples/runbook-clean",
+    "pack:check": "npm pack --dry-run",
+    "check": "npm run lint && npm test && npm run example && npm run pack:check"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/edilec/runbook-step-linter"
-  }
+    "url": "git+https://github.com/edilec/runbook-step-linter.git"
+  },
+  "bin": {
+    "runbook-step-linter": "./bin/runbook-step-linter.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "runbook",
+    "operations",
+    "oncall",
+    "linter",
+    "markdown",
+    "incident-response",
+    "cli"
+  ],
+  "author": "Edilec Private Limited",
+  "bugs": {
+    "url": "https://github.com/edilec/runbook-step-linter/issues"
+  },
+  "homepage": "https://github.com/edilec/runbook-step-linter#readme"
 }
