@@ -187,9 +187,13 @@ The report follows the Edilec tool report contract v1.
   `/steps/<n>/commands`, `/preamble`, `/preamble/<field>`, or `/` for a document-level finding.
   `<n>` is the step's 1-based position in its document.
 - `line` is present when a finding has one, and is the 1-based line in the document.
-- `evidence` is a bounded, flattened excerpt with control characters, `U+2028` and `U+2029` removed.
-  Every untrusted string that reaches the report is sanitised the same way, including file paths,
-  step headings and field labels — not only `evidence`.
+- `evidence` is a bounded, flattened excerpt. Every untrusted string that reaches either report is
+  sanitised the same way — file paths, step headings and field labels, not only `evidence` — and an
+  identifier is treated as exactly as dangerous as an excerpt. Removed: `U+0000`-`U+001F` (C0),
+  `U+007F` (DEL), `U+0080`-`U+009F` (C1, which is where `U+0085` NEL and the 8-bit CSI `U+009B`
+  live), `U+2028` and `U+2029`, and the bidirectional formatting characters `U+200E`, `U+200F`,
+  `U+202A`-`U+202E` and `U+2066`-`U+2069`. A name carrying `U+0085` would otherwise forge a line in
+  the human report, and one carrying `U+202E` would reverse everything displayed after it.
 
 ### Exit codes
 

@@ -131,7 +131,9 @@ started would be worse.
 - **Containment is decided on real paths, both sides.** A symlink escaping the root is refused; a
   file genuinely inside a symlinked root is still linted.
 - **Every untrusted string reaching output is sanitised** — paths, headings, labels and excerpts, not
-  only `evidence`.
+  only `evidence`. C0, DEL, the C1 range (`U+0085` NEL and `U+009B` CSI included), `U+2028`,
+  `U+2029` and the bidi overrides are removed, so nothing read can forge a report line or reverse
+  one.
 - **Output is deterministic.** No wall clock, locale, `localeCompare`, random source or network.
 
 ## Limits and non-goals

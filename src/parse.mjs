@@ -17,19 +17,27 @@ export function byCodeUnit(left, right) {
 /**
  * Characters removed before any runbook text is embedded in a report.
  *
- * Built from code points rather than written literally, because a literal
- * U+2028 inside a module is a syntax error. This is applied to every untrusted
- * string that reaches output -- file paths, headings, field labels, values and
- * command excerpts alike -- not only to the evidence field. A heading
- * containing a newline would otherwise forge extra lines in the human report.
+ * Written as escapes rather than literally, because a literal U+2028 inside a
+ * module is a hazard of its own. This is applied to every untrusted string that
+ * reaches output -- file paths, headings, field labels, values and command
+ * excerpts alike -- not only to the evidence field. An identifier is as
+ * dangerous as an excerpt here: a file name carrying U+0085 forges a report
+ * line just as well as a heading does.
+ *
+ * Five classes, each for a reason a reader would care about:
+ *
+ * - `U+0000-U+001F` C0, and `U+007F` DEL -- a newline forges a report line, and
+ *   an ESC starts a terminal escape sequence.
+ * - `U+0080-U+009F` C1. Half-forgotten and twice as dangerous: `U+0085` NEL is
+ *   a line break to a great many readers, and `U+009B` is the 8-bit form of
+ *   CSI, so it opens a terminal control sequence without an ESC in sight.
+ * - `U+2028` and `U+2029` -- line and paragraph separators.
+ * - `U+200E`, `U+200F`, `U+202A-U+202E`, `U+2066-U+2069` -- the bidirectional
+ *   formatting characters. `U+202E` RIGHT-TO-LEFT OVERRIDE reverses everything
+ *   displayed after it, so a rule id or a path can be made to read as something
+ *   else entirely while the bytes say otherwise.
  */
-const CONTROL = new RegExp(
-  `[${String.fromCharCode(0)}-${String.fromCharCode(8)}` +
-  `${String.fromCharCode(11)}${String.fromCharCode(12)}` +
-  `${String.fromCharCode(14)}-${String.fromCharCode(31)}` +
-  `${String.fromCharCode(127)}${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}]`,
-  'g',
-)
+const CONTROL = /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
 
 const BOM = String.fromCharCode(0xfeff)
 

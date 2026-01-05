@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { DEFAULT_LIMITS, lintRunbookText, lintRunbooks, validateLimits, validateStepLevel } from '../src/index.mjs'
+import { DEFAULT_LIMITS, formatReport, lintRunbookText, lintRunbooks, validateLimits, validateStepLevel } from '../src/index.mjs'
 
 const STEP = [
   '## 1. Cordon the node',
@@ -172,6 +172,39 @@ test('a symlinked subdirectory that stays inside the root is linted, not refused
     assert.equal(ruleIds(report).includes('path-escapes-root'), false)
     assert.equal(report.summary.documents, 1, 'the same real path is not collected twice')
     assert.equal(report.status, 'pass')
+  })
+})
+
+/**
+ * Defect class: sanitising the excerpt field and forgetting the identifiers. A
+ * file name is untrusted input in exactly the way a heading is, and it reaches
+ * both reports through `location.file` rather than through `evidence`. U+0085
+ * NEL forges a line, U+009B opens a terminal control sequence, and U+202E
+ * reverses everything displayed after it.
+ */
+test('control and bidi characters in a FILE NAME never reach either report', async () => {
+  await withRoot(async (root) => {
+    const nel = String.fromCharCode(0x85)
+    const csi = String.fromCharCode(0x9b)
+    const rlo = String.fromCharCode(0x202e)
+    const hostile = `a${nel}ERROR forged${csi}31m${rlo}.md`
+    await writeFile(join(root, hostile), `## 1. Do the thing${nel}ERROR forged heading\n\nnothing\n`)
+
+    const report = await lintRunbooks({ root })
+    const files = [...new Set(report.findings.map((finding) => finding.location.file))]
+    assert.deepEqual(files, ['a ERROR forged 31m .md'], 'the name reached the report, sanitised')
+
+    for (const text of [JSON.stringify(report), formatReport(report)]) {
+      for (const [name, character] of [['U+0085 NEL', nel], ['U+009B CSI', csi], ['U+202E RLO', rlo]]) {
+        assert.equal(text.includes(character), false, `${name} reached the report through the file name`)
+      }
+    }
+    const evidence = report.findings.map((finding) => finding.evidence).filter((value) => value !== undefined)
+    assert.equal(evidence.includes('1. Do the thing ERROR forged heading'), true, 'and so did the heading, sanitised')
+
+    // The human report is one line per finding, and nothing in it forges more.
+    const lines = formatReport(report).trimEnd().split('\n')
+    assert.equal(lines.length, 3 + report.findings.length)
   })
 })
 

@@ -50,6 +50,51 @@ test('excerpt flattens newlines, tabs and the separator characters that forge re
   assert.equal(excerpt('  spaced   out  '), 'spaced out')
 })
 
+/**
+ * Defect class: a sanitisation class that covers the characters everybody
+ * remembers and lets the rest through. C0 and the two separators are the ones
+ * every tool strips; the C1 range is the one that gets forgotten, and it holds
+ * U+0085 NEL -- a line break to a great many readers -- and U+009B, the 8-bit
+ * CSI that opens a terminal control sequence with no ESC in sight. The bidi
+ * overrides are worse still: U+202E reverses everything displayed after it, so
+ * a path or a rule id can be made to read as something else entirely.
+ *
+ * Each class is asserted separately, so removing any one of them from the
+ * character class fails a named assertion rather than a single lump.
+ */
+test('excerpt removes every class of character that can forge or reverse a report line', () => {
+  const classes = {
+    'C0 control': [0x00, 0x07, 0x08, 0x1b, 0x1f],
+    DEL: [0x7f],
+    'C1 control': [0x80, 0x85, 0x9b, 0x9f],
+    'line and paragraph separator': [0x2028, 0x2029],
+    'bidi formatting': [0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069],
+  }
+  for (const [name, points] of Object.entries(classes)) {
+    for (const point of points) {
+      const marked = `a${String.fromCharCode(point)}b`
+      assert.equal(excerpt(marked), 'a b', `${name} U+${point.toString(16).padStart(4, '0')} survived excerpt`)
+    }
+  }
+
+  // The whole C0 and C1 range, exhaustively: a range written by hand is exactly
+  // where an off-by-one hides.
+  for (let point = 0; point <= 0x9f; point += 1) {
+    if (point >= 0x20 && point <= 0x7e) continue
+    assert.equal(excerpt(`a${String.fromCharCode(point)}b`), 'a b', `U+${point.toString(16).padStart(4, '0')} survived excerpt`)
+  }
+  assert.equal(excerpt('a~b'), 'a~b', 'printable characters are left alone')
+  assert.equal(excerpt('a\u00e9b'), 'a\u00e9b', 'so is ordinary accented text')
+})
+
+test('the same classes are removed from labels, not only from excerpts', () => {
+  const nel = String.fromCharCode(0x85)
+  const rlo = String.fromCharCode(0x202e)
+  assert.equal(displayLabel(`Reco${nel}very:`), 'Reco very')
+  assert.equal(normalizeLabel(`Reco${rlo}very:`), 'reco very')
+  assert.equal(normalizeLabel(`Owner${String.fromCharCode(0x9b)}31m`), 'owner 31m')
+})
+
 test('excerpt bounds its output at the documented limit', () => {
   const long = 'x'.repeat(EXCERPT_LIMIT + 50)
   const result = excerpt(long)
