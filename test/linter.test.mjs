@@ -2,10 +2,18 @@ import assert from 'node:assert/strict'
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import test from 'node:test'
 
-import { DEFAULT_LIMITS, formatReport, lintRunbookText, lintRunbooks, validateLimits, validateStepLevel } from '../src/index.mjs'
+import {
+  DEFAULT_LIMITS,
+  formatReport,
+  isInside,
+  lintRunbookText,
+  lintRunbooks,
+  validateLimits,
+  validateStepLevel,
+} from '../src/index.mjs'
 
 const STEP = [
   '## 1. Cordon the node',
@@ -139,6 +147,49 @@ test('a symlink escaping the root is refused and its content is never read', asy
     assert.equal(report.summary.documents, 1, 'only the real document was collected')
     assert.equal(JSON.stringify(report).includes('OUTSIDE_CONTENT_MARKER'), false, 'out-of-root content leaked into the report')
   })
+})
+
+/**
+ * Defect class: containment decided by a bare prefix test. `/tmp/x/runbooks`
+ * is a prefix of `/tmp/x/runbooks-archive`, which is a different directory
+ * entirely, so the separator is the whole of the boundary. The escape test
+ * above cannot see this: its `outside/` shares no prefix with `runbooks/`, so
+ * it passes just as well against `candidate.startsWith(root)`.
+ */
+test('a sibling whose name merely starts with the root name is outside it', async () => {
+  await withRoot(async (base) => {
+    const root = join(base, 'runbooks')
+    const sibling = join(base, 'runbooks-archive')
+    await mkdir(root)
+    await mkdir(sibling)
+    await writeFile(join(sibling, 'sibling.md'), `${STEP}\nPREFIX_SIBLING_MARKER\n`)
+    await writeFile(join(root, 'real.md'), STEP)
+    await symlink(join(sibling, 'sibling.md'), join(root, 'prefix.md'))
+
+    const report = await lintRunbooks({ root })
+    const escaped = report.findings.filter((finding) => finding.ruleId === 'path-escapes-root')
+
+    assert.equal(escaped.length, 1, 'the prefix sibling is outside the root and must be refused')
+    assert.equal(escaped[0].location.file, 'prefix.md')
+    assert.equal(report.summary.checked, 1, 'only the document genuinely inside the root was linted')
+    assert.equal(
+      JSON.stringify(report).includes('PREFIX_SIBLING_MARKER'),
+      false,
+      'content from the prefix sibling leaked into the report',
+    )
+  })
+})
+
+test('isInside puts the boundary at the separator, in both directions', () => {
+  const root = join('tmp', 'x', 'runbooks')
+  assert.equal(isInside(root, root), true, 'the root is inside itself')
+  assert.equal(isInside(root, join(root, 'a.md')), true)
+  assert.equal(isInside(root, join(root, 'nested', 'a.md')), true)
+  assert.equal(isInside(root, `${root}-archive`), false, 'a name-prefix sibling is not inside')
+  assert.equal(isInside(root, `${root}2`), false)
+  assert.equal(isInside(root, join('tmp', 'x', 'runbooksarchive', 'a.md')), false)
+  assert.equal(isInside(root, join('tmp', 'x')), false, 'the parent is not inside the child')
+  assert.equal(isInside(sep, join(sep, 'etc')), true, 'a root that already ends in a separator gains no second one')
 })
 
 /**
