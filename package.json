@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "lint": "node --check src/index.mjs && node --check src/parse.mjs && node --check src/rules.mjs && node --check bin/runbook-step-linter.mjs && node --check test/parse.test.mjs && node --check test/rules.test.mjs && node --check test/linter.test.mjs && node --check test/cli.test.mjs && node --check test/severity-table.test.mjs && node --check test/determinism.test.mjs && node --check test/no-execution.test.mjs",
+    "lint": "node --check src/index.mjs && node --check src/parse.mjs && node --check src/rules.mjs && node --check bin/runbook-step-linter.mjs && node --check test/parse.test.mjs && node --check test/rules.test.mjs && node --check test/linter.test.mjs && node --check test/cli.test.mjs && node --check test/severity-table.test.mjs && node --check test/severity-exit.test.mjs && node --check test/determinism.test.mjs && node --check test/no-execution.test.mjs",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**",
     "example": "node bin/runbook-step-linter.mjs --root examples/runbook-clean",
