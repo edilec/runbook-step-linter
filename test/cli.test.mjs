@@ -13,13 +13,19 @@ const CLI = join(projectDirectory, 'bin/runbook-step-linter.mjs')
 const CLEAN_ROOT = join(projectDirectory, 'examples/runbook-clean')
 const BROKEN_ROOT = join(projectDirectory, 'examples/runbook-broken')
 
-/** Run the real binary and report what actually reached each stream. */
-async function cli(args) {
+/**
+ * Run the real binary and report what actually reached each stream.
+ *
+ * `killed` matters: a run that had to be killed produced no report at all, and
+ * a test that only parses stdout would report that as a parse error rather
+ * than as the hang it is.
+ */
+async function cli(args, options = {}) {
   try {
-    const { stdout, stderr } = await run(process.execPath, [CLI, ...args], { cwd: projectDirectory })
-    return { code: 0, stdout, stderr }
+    const { stdout, stderr } = await run(process.execPath, [CLI, ...args], { cwd: projectDirectory, ...options })
+    return { code: 0, stdout, stderr, killed: false }
   } catch (error) {
-    return { code: error.code, stdout: error.stdout, stderr: error.stderr }
+    return { code: error.code, stdout: error.stdout, stderr: error.stderr, killed: error.killed === true, signal: error.signal }
   }
 }
 
@@ -202,6 +208,45 @@ test('diagnostics go to stderr so stdout stays pipeable', async () => {
     assert.doesNotThrow(() => JSON.parse(result.stdout))
     assert.notEqual(result.stderr, '')
     assert.equal(result.stdout.includes('incomplete:'), false, 'the stderr diagnostic must not be on stdout')
+  })
+})
+
+/**
+ * Defect class: a guard whose stated reason nobody tested. The `isFile` check
+ * exists because "reading one can block forever", and the suite's only
+ * non-regular-file fixture is a unix socket -- whose read fails instantly, so
+ * it lands on the same finding by a path that actually opened the entry. The
+ * guard can be deleted and that test still passes.
+ *
+ * A FIFO is the case the comment is about: opening one for reading blocks
+ * until a writer arrives, which is never. Without the guard the binary hangs
+ * with an empty stdout and no report at all; with it, the entry is reported
+ * unopened and the run ends immediately.
+ */
+test('a FIFO named like a runbook is reported without ever being opened', async (t) => {
+  await withRoot(async (root) => {
+    await writeFile(join(root, 'drain.md'), STEP)
+    const fifo = join(root, 'pipe.md')
+    try {
+      await run('mkfifo', [fifo])
+    } catch {
+      t.skip('mkfifo is not available on this platform')
+      return
+    }
+
+    // No writer is ever opened on this FIFO, so an implementation that opens it
+    // waits forever and is killed here instead of returning a report.
+    const result = await cli(['--root', root, '--json'], { timeout: 15000 })
+
+    assert.equal(result.killed, false, 'the run had to be killed: it opened the FIFO and blocked')
+    assert.equal(result.code, 2, 'an unexamined runbook-shaped entry makes the run incomplete')
+
+    const report = JSON.parse(result.stdout)
+    const unreadable = report.findings.filter((finding) => finding.ruleId === 'document-unreadable')
+    assert.equal(unreadable.length, 1)
+    assert.equal(unreadable[0].location.file, 'pipe.md')
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.checked, 1, 'the real document beside it was still linted')
   })
 })
 
