@@ -293,6 +293,59 @@ test('a document that cannot be opened makes the run incomplete', async () => {
   })
 })
 
+/**
+ * Defect class: an entry that could not even be resolved, reported and then
+ * counted as a complete run. A dangling symlink named like a runbook fails at
+ * `realpath`, so nothing is ever known about what it pointed at. The finding
+ * is an error, so a run that also holds a clean document would say `fail` --
+ * a verdict on the runbook set -- rather than `incomplete`, which is the
+ * honest answer when a candidate was never read. Only the flag on that path
+ * separates the two, and deleting it leaves the rest of the suite green.
+ */
+test('an entry that cannot be resolved makes the run incomplete, not merely failed', async () => {
+  await withRoot(async (root) => {
+    // The clean sibling keeps `checked` above zero, so the root-level "nothing
+    // was linted" guard stays silent and this path's own flag is what decides.
+    await writeFile(join(root, 'good.md'), STEP)
+    await symlink(join(root, 'nothing-here.md'), join(root, 'dangling.md'))
+
+    const report = await lintRunbooks({ root })
+    const unreadable = report.findings.filter((finding) => finding.ruleId === 'document-unreadable')
+
+    assert.equal(unreadable.length, 1)
+    assert.equal(unreadable[0].location.file, 'dangling.md')
+    assert.equal(report.summary.checked, 1, 'the clean sibling was linted, so the root-level guard does not fire')
+    assert.equal(report.summary.errors > 0, true, 'the finding is an error, so without the flag this run would say fail')
+    assert.equal(report.status, 'incomplete', 'nothing is known about the entry, and unknown is never a verdict')
+  })
+})
+
+test('a directory that cannot be read makes the run incomplete, not merely failed', async (t) => {
+  if (process.getuid !== undefined && process.getuid() === 0) {
+    t.skip('root can read a directory whatever its mode says')
+    return
+  }
+  await withRoot(async (root) => {
+    await writeFile(join(root, 'good.md'), STEP)
+    const locked = join(root, 'locked')
+    await mkdir(locked)
+    await writeFile(join(locked, 'hidden.md'), STEP)
+    await chmod(locked, 0o000)
+    try {
+      const report = await lintRunbooks({ root })
+      const unreadable = report.findings.filter((finding) => finding.ruleId === 'document-unreadable')
+
+      assert.equal(unreadable.length, 1)
+      assert.equal(unreadable[0].location.file, 'locked')
+      assert.equal(report.summary.checked, 1, 'the clean sibling was linted, so the root-level guard does not fire')
+      assert.equal(report.summary.errors > 0, true, 'the finding is an error, so without the flag this run would say fail')
+      assert.equal(report.status, 'incomplete', 'a subtree nobody could read is missing evidence, not a verdict')
+    } finally {
+      await chmod(locked, 0o700)
+    }
+  })
+})
+
 test('an entry named like a runbook that is not a regular file is reported, not opened', async () => {
   await withRoot(async (root) => {
     await writeFile(join(root, 'drain.md'), STEP)
