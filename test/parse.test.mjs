@@ -159,7 +159,33 @@ test('every label in the vocabulary maps to one of the four requirements', () =>
   const requirements = new Set(Object.values(STEP_FIELDS))
   assert.deepEqual([...requirements].sort(byCodeUnit), ['expectedOutput', 'owner', 'prerequisites', 'recovery'])
   assert.equal(FIELD_LABELS.length, Object.keys(STEP_FIELDS).length)
-  assert.deepEqual([...FIELD_LABELS], [...FIELD_LABELS].sort(byCodeUnit))
+  // The order written out, not re-derived: comparing a list against a sort of
+  // itself agrees with whatever comparator produced it.
+  assert.deepEqual([...FIELD_LABELS], [
+    'expected output',
+    'expected result',
+    'on failure',
+    'owner',
+    'owners',
+    'preconditions',
+    'prerequisite',
+    'prerequisites',
+    'recovery',
+    'rollback',
+    'verification',
+    'verify',
+  ])
+})
+
+/**
+ * Two vocabulary labels can sit the same distance from one written label, and
+ * which one a reader is told to write must not depend on the order the
+ * vocabulary happens to be in. The tie is broken by code unit, deliberately.
+ */
+test('a label equally close to two vocabulary labels resolves the same way every time', () => {
+  assert.deepEqual(nearestLabel('ownerz'), { label: 'owner', distance: 1 }, 'owner precedes owners by code unit')
+  assert.deepEqual(nearestLabel('prerequisitez'), { label: 'prerequisite', distance: 1 })
+  assert.equal(editDistance('ownerz', 'owner'), editDistance('ownerz', 'owners'), 'the two candidates really are tied')
 })
 
 test('editDistance is exact below the cap and saturates above it', () => {

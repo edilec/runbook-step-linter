@@ -305,6 +305,46 @@ test('findings sort by file, then line, then pointer, rule and message', () => {
   ])
 })
 
+/**
+ * Defect class: ordering held only by a source grep for `localeCompare`. Each
+ * key of the finding sort is pinned here against a pair the two comparators
+ * order differently, so substituting `Intl.Collator` -- identical drift,
+ * different spelling -- changes the emitted order and fails this test.
+ *
+ * `sortRows` is exported, and the rows it is given carry untrusted strings, so
+ * these pairs are not hypothetical: a file name really can be `Zebra.md` next
+ * to `apple.md`, and a message really can quote a label written `a-b` next to
+ * one written `a_b`.
+ */
+test('every key of the finding sort orders by code unit, not by collation', () => {
+  const collator = new Intl.Collator('en')
+  const base = { file: 'a.md', line: 1, pointer: '/steps/1', ruleId: 'step-owner-missing', message: 'm' }
+  const cases = [
+    { key: 'file', first: 'Zebra.md', second: 'apple.md' },
+    { key: 'pointer', first: '/steps/1/URLS', second: '/steps/1/URL_ENTRIES' },
+    { key: 'ruleId', first: 'step-two', second: 'step_two' },
+    { key: 'message', first: 'a-b restates it', second: 'a_b restates it' },
+  ]
+
+  for (const { key, first, second } of cases) {
+    assert.equal(first < second, true, `${first} precedes ${second} by code unit`)
+    assert.equal(collator.compare(first, second) > 0, true, `a collator puts ${second} first, which is the disagreement being pinned`)
+
+    const rows = [{ ...base, [key]: second }, { ...base, [key]: first }]
+    assert.deepEqual(
+      sortRows(rows).map((row) => row[key]),
+      [first, second],
+      `the ${key} tiebreak stopped comparing code units`,
+    )
+  }
+})
+
+test('the sort puts the lower line first whatever the line numbers look like as text', () => {
+  const base = { file: 'a.md', pointer: '/', ruleId: 'step-owner-missing', message: 'm' }
+  const rows = [{ ...base, line: 100 }, { ...base, line: 9 }, { ...base, line: 10 }]
+  assert.deepEqual(sortRows(rows).map((row) => row.line), [9, 10, 100], 'lines are numbers, not strings')
+})
+
 test('the report envelope matches the Edilec report contract', () => {
   const report = lintRunbookText(COMPLETE_STEP, { file: 'clean.md' })
   assert.equal(report.schemaVersion, '1')

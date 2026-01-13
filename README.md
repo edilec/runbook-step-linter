@@ -134,7 +134,8 @@ started would be worse.
   only `evidence`. C0, DEL, the C1 range (`U+0085` NEL and `U+009B` CSI included), `U+2028`,
   `U+2029` and the bidi overrides are removed, so nothing read can forge a report line or reverse
   one.
-- **Output is deterministic.** No wall clock, locale, `localeCompare`, random source or network.
+- **Output is deterministic.** No wall clock, locale, `localeCompare`, `Intl.Collator`, random
+  source or network — pinned by the order the report actually emits, not by grepping the source.
 
 ## Limits and non-goals
 

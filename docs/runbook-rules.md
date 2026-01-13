@@ -211,17 +211,21 @@ evidence, so `no-documents-found` is emitted and the run is marked incomplete on
 
 - Directory entries are sorted by UTF-16 code unit before use, so filesystem enumeration order never
   reaches the output.
-- Comparisons use a plain code-unit comparator. `localeCompare` is never used anywhere in this tool:
-  its result depends on ICU data that varies between Node builds.
+- Comparisons use a plain code-unit comparator. Neither `localeCompare` nor `Intl.Collator` is used
+  anywhere in this tool: both order by ICU data that varies between Node builds, and they differ
+  from code units on pairs as ordinary as `URLS.md` against `URL_ENTRIES.md` or `Zebra.md` against
+  `apple.md`.
 - Findings sort by `(location.file, line, location.pointer, ruleId, message)`.
 - Nothing reads the wall clock, the locale, the environment or the network. Two runs over the same
   bytes produce byte-identical stdout.
 
-Two runs inside one process and one locale agree with each other whatever the comparator does, so
-`test/determinism.test.mjs` pins the properties themselves: the comparator's own ordering against
-pairs an English collator orders the other way, the sort that stands between directory enumeration
-and the report, and the absence of `localeCompare`, the clock, a random source, the environment and
-the network from the shipped source.
+Two runs inside one process and one locale agree with each other whatever the comparator does, and
+so does a source scan for the word `localeCompare` — `Intl.Collator` drifts identically and spells
+itself differently. So the ordering is pinned by what the tool emits. `test/determinism.test.mjs`
+drives pairs the two comparators order oppositely through the real walk and asserts which document a
+document-count cut-off keeps, and `test/rules.test.mjs` asserts the emitted order for every key of
+the finding sort against such a pair. Substituting a collator at any of those sites changes the
+output and fails those tests; the source scan is kept as a secondary guard, not as the proof.
 
 ## What this tool cannot conclude
 

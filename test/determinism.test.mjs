@@ -86,9 +86,60 @@ test('directory entries are ordered by code unit, not by collation', async () =>
   }
 })
 
-test('the shipped source never calls localeCompare', async () => {
+/**
+ * Defect class: code-unit ordering defended by grepping the source for the
+ * literal `localeCompare`. `Intl.Collator` collates identically and spells
+ * differently, so the grep passes while the walk order silently becomes
+ * dependent on the ICU data of whatever Node build is running.
+ *
+ * The walk order is not cosmetic: it decides which document survives a
+ * document-count cut-off, and therefore which document is linted at all. Both
+ * pairs below are ordered one way by code unit and the other way by an English
+ * collator, so substituting one comparator for the other changes which file
+ * appears in the report.
+ */
+test('the document-count cut-off follows code units, not collation', async () => {
+  const collator = new Intl.Collator('en')
+  const bare = '## 1. Do the thing\n\nNothing is stated here.\n'
+
+  for (const [first, second] of [['URLS.md', 'URL_ENTRIES.md'], ['Zebra.md', 'apple.md']]) {
+    assert.equal(byCodeUnit(first, second), -1, `${first} precedes ${second} by code unit`)
+    assert.equal(collator.compare(first, second) > 0, true, 'and a collator puts it second, which is the disagreement being pinned')
+
+    const base = await mkdtemp(join(tmpdir(), 'runbook-step-linter-cutoff-'))
+    try {
+      await writeFile(join(base, second), bare)
+      await writeFile(join(base, first), bare)
+
+      const report = await lintRunbooks({ root: base, limits: { maxDocuments: 1 } })
+      const linted = [...new Set(
+        report.findings.filter((finding) => finding.ruleId === 'step-recovery-missing').map((finding) => finding.location.file),
+      )]
+      const stopped = report.findings.filter((finding) => finding.ruleId === 'too-many-documents')
+
+      assert.deepEqual(linted, [first], `the walk must lint ${first} and never reach ${second}`)
+      assert.equal(stopped.length, 1)
+      assert.equal(stopped[0].location.file, second, 'and must stop at the next entry in code-unit order')
+      assert.equal(report.status, 'incomplete')
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  }
+})
+
+/**
+ * A secondary guard, and only that. The tests above are what actually pin the
+ * ordering: a source scan cannot tell a comparator apart from its replacement,
+ * and `Intl.Collator` was exactly that replacement -- identical drift,
+ * different spelling. Both spellings are named here because there is no
+ * legitimate use for either in a tool whose output must not move with the ICU
+ * data of the Node build that happens to run it.
+ */
+test('the shipped source never reaches for a locale-aware comparison', async () => {
   const source = await shippedSource()
   assert.equal(source.includes('localeCompare'), false, 'localeCompare depends on ICU data that varies between Node builds')
+  assert.equal(/\bIntl\b/.test(source), false, 'Intl.Collator drifts exactly as localeCompare does')
+  assert.equal(/\btoLocale(?:Lower|Upper)Case\b/.test(source), false, 'locale-aware case folding drifts too')
 })
 
 test('the shipped source reads no clock, no random source and no environment', async () => {
