@@ -452,6 +452,46 @@ test('maxStepLines truncates a step, reports it, and makes the run incomplete', 
   assert.equal(whole.status, 'pass')
 })
 
+/**
+ * Defect class: a counter that counts what was found rather than what was
+ * read. `checked` is documented as the number of steps linted, and the whole
+ * "pass with checked: 0 is unreachable" guarantee is written in terms of it,
+ * so a step whose body a limit cut short must not appear in it. Nothing here
+ * says whether that step named an owner or a recovery path -- that is exactly
+ * why the run is incomplete.
+ */
+test('checked counts the steps that were read, not the steps a limit cut short', () => {
+  const padded = STEP.replace('```sh\n', `${'filler\n'.repeat(20)}\`\`\`sh\n`)
+  const bounded = lintRunbookText(padded, { file: 'a.md', limits: { maxStepLines: 5 } })
+
+  assert.equal(bounded.summary.steps, 1, 'the step was found')
+  assert.equal(bounded.summary.checked, 0, 'and none of it was examined')
+  assert.equal(bounded.status, 'incomplete')
+
+  const whole = lintRunbookText(padded, { file: 'a.md', limits: { maxStepLines: 400 } })
+  assert.equal(whole.summary.checked, 1, 'inside the limit the same step is read and counted')
+  assert.equal(whole.summary.steps, 1)
+  assert.equal(whole.status, 'pass')
+})
+
+test('a run whose every step was cut short reports checked 0 and says so', async () => {
+  await withRoot(async (root) => {
+    const padded = STEP.replace('```sh\n', `${'filler\n'.repeat(20)}\`\`\`sh\n`)
+    await writeFile(join(root, 'long.md'), padded)
+
+    const report = await lintRunbooks({ root, limits: { maxStepLines: 5 } })
+    assert.equal(report.summary.checked, 0)
+    assert.equal(report.summary.steps, 1)
+    assert.equal(ruleIds(report).includes('step-too-long'), true)
+    assert.equal(
+      ruleIds(report).includes('no-documents-found'),
+      true,
+      'checked: 0 is reported in its own right, not only through the limit that caused it',
+    )
+    assert.equal(report.status, 'incomplete')
+  })
+})
+
 test('an unterminated fence makes the run incomplete rather than reporting what it never saw', () => {
   const text = `${STEP.replace(/```\n$/, '')}\n## 2. Drain the node\n\nOwner: platform-oncall\n`
   const report = lintRunbookText(text, { file: 'a.md' })

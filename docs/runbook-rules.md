@@ -178,9 +178,13 @@ the caller can no longer see: `--root a --root b` is refused rather than resolve
 The report follows the Edilec tool report contract v1.
 
 - `status` is `pass`, `fail` or `incomplete`.
-- `summary` carries `checked` (steps linted), `errors`, `warnings`, `info`, `documents`, `skipped`,
-  `steps`, `fencedCommands`, `looseCommands`, `stepsWithOwner`, `stepsWithPrerequisites`,
+- `summary` carries `checked`, `errors`, `warnings`, `info`, `documents`, `skipped`, `steps`,
+  `fencedCommands`, `looseCommands`, `stepsWithOwner`, `stepsWithPrerequisites`,
   `stepsWithExpectedOutput` and `stepsWithRecovery`.
+- `steps` is how many steps were **found**; `checked` is how many were **read to the end**. They
+  differ when a limit cut a step short: such a step is counted in `steps`, reported as
+  `step-too-long`, and left out of `checked`, because nothing is known about the part that was never
+  examined.
 - `location.file` is always relative to the runbook root, never an absolute host path.
 - `location.pointer` is a documented field path: `/steps/<n>`, `/steps/<n>/owner`,
   `/steps/<n>/prerequisites`, `/steps/<n>/expected-output`, `/steps/<n>/recovery`,
@@ -205,7 +209,10 @@ The report follows the Edilec tool report contract v1.
 | 2 | evidence missing, undecodable or bounded out | an `incomplete` report |
 
 A run that linted no step is `incomplete`, never a pass. `pass` with `checked: 0` is green on no
-evidence, so `no-documents-found` is emitted and the run is marked incomplete on that path.
+evidence, so `no-documents-found` is emitted and the run is marked incomplete on that path. The
+guard is written in terms of `checked` itself, so a run that found steps and read none of them --
+every one of them cut short by a limit -- is caught by it too, and not only by the limit's own
+flag.
 
 ## Determinism
 

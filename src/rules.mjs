@@ -274,6 +274,10 @@ export function lintDocument(file, parsed, options = {}) {
   const collector = { rows: [], incomplete: false }
   const stats = {
     steps: parsed.steps.length,
+    // `steps` is what was found; `checked` is what was actually read. A step a
+    // limit cut short was found and never examined, so counting it as checked
+    // would overstate the evidence this run has.
+    checked: 0,
     fences: 0,
     looseCommands: 0,
     satisfied: { expectedOutput: 0, owner: 0, prerequisites: 0, recovery: 0 },
@@ -335,6 +339,7 @@ export function lintDocument(file, parsed, options = {}) {
       continue
     }
 
+    stats.checked += 1
     const resolved = resolveFields(collector, file, pointer, step)
     stats.fences += step.fences.length
     stats.looseCommands += step.commands.length

@@ -290,7 +290,7 @@ function buildReport(collector, counts) {
     tool: TOOL_ID,
     status,
     summary: {
-      checked: counts.steps,
+      checked: counts.checked,
       errors,
       warnings,
       info: findings.length - errors - warnings,
@@ -339,6 +339,7 @@ export function lintRunbookText(text, options = {}) {
   return buildReport(collector, {
     documents: 1,
     skipped: 0,
+    checked: result.stats.checked,
     steps: result.stats.steps,
     fences: result.stats.fences,
     looseCommands: result.stats.looseCommands,
@@ -379,6 +380,7 @@ export async function lintRunbooks(options = {}) {
   const counts = {
     documents: files.length,
     skipped: 0,
+    checked: 0,
     steps: 0,
     fences: 0,
     looseCommands: 0,
@@ -399,6 +401,7 @@ export async function lintRunbooks(options = {}) {
     const result = lintDocument(entry.file, parsed, { limits })
     collector.rows.push(...result.rows)
     if (result.incomplete) collector.incomplete = true
+    counts.checked += result.stats.checked
     counts.steps += result.stats.steps
     counts.fences += result.stats.fences
     counts.looseCommands += result.stats.looseCommands
@@ -411,8 +414,13 @@ export async function lintRunbooks(options = {}) {
    * Green on no evidence is a defect, not a clean bill of health. A run that
    * linted no step checked nothing, so it is reported and marked incomplete --
    * `pass` with `checked: 0` is not reachable from here.
+   *
+   * The test is `checked`, the field the guarantee is written in terms of, and
+   * not `steps`: a document whose every step a limit cut short found steps and
+   * examined none of them, and saying so here does not depend on the flag that
+   * the limit itself sets.
    */
-  if (counts.steps === 0) {
+  if (counts.checked === 0) {
     record(collector, {
       ...ROOT_LOCATION,
       ruleId: 'no-documents-found',
