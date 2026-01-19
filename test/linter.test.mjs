@@ -144,7 +144,9 @@ test('a symlink escaping the root is refused and its content is never read', asy
 
     assert.equal(escaped.length, 1)
     assert.equal(escaped[0].location.file, 'escape.md')
-    assert.equal(report.summary.documents, 1, 'only the real document was collected')
+    assert.equal(report.summary.checked, 1, 'only the real document was linted')
+    assert.equal(report.summary.documents, 2, 'both were found')
+    assert.equal(report.summary.skipped, 1, 'and the refused one is counted as not linted')
     assert.equal(JSON.stringify(report).includes('OUTSIDE_CONTENT_MARKER'), false, 'out-of-root content leaked into the report')
   })
 })
@@ -367,6 +369,86 @@ test('an entry named like a runbook that is not a regular file is reported, not 
   })
 })
 
+/**
+ * Defect class: a summary that counts only what it managed to read. `skipped`
+ * counted documents that failed to load and nothing else, so an entry refused
+ * before collection -- the very entry that made the run incomplete -- appeared
+ * in neither `documents` nor `skipped`, and the run reported "0 document(s)
+ * were not linted out of 1 found".
+ */
+test('a document refused before collection is counted as found and as not linted', async () => {
+  const cases = [
+    {
+      name: 'a dangling symlink',
+      // Nothing is known about what it pointed at, so the run is incomplete.
+      status: 'incomplete',
+      plant: async (root) => {
+        await symlink(join(root, 'nothing-here.md'), join(root, 'dangling.md'))
+      },
+    },
+    {
+      name: 'an entry resolving outside the root',
+      // Refused deliberately rather than unknown, so this one fails on the
+      // severity of path-escapes-root. Either way it is not a pass, and either
+      // way the entry has to be visible in the counts.
+      status: 'fail',
+      plant: async (root, base) => {
+        const outside = join(base, 'outside')
+        await mkdir(outside)
+        await writeFile(join(outside, 'secret.md'), STEP)
+        await symlink(join(outside, 'secret.md'), join(root, 'escape.md'))
+      },
+    },
+    {
+      name: 'an entry that is not a regular file',
+      status: 'incomplete',
+      plant: async (root) => {
+        const server = createServer()
+        await new Promise((resolve, reject) => {
+          server.once('error', reject)
+          server.listen(join(root, 'socket.md'), resolve)
+        })
+        return () => new Promise((resolve) => server.close(resolve))
+      },
+    },
+  ]
+
+  for (const { name, status, plant } of cases) {
+    await withRoot(async (base) => {
+      const root = join(base, 'runbooks')
+      await mkdir(root)
+      await writeFile(join(root, 'good.md'), STEP)
+      const cleanup = await plant(root, base)
+      try {
+        const report = await lintRunbooks({ root })
+        assert.equal(report.summary.checked, 1, `${name}: the clean document was linted`)
+        assert.equal(report.summary.documents, 2, `${name}: the refused entry was found`)
+        assert.equal(report.summary.skipped, 1, `${name}: and it was not linted`)
+        assert.equal(report.status, status, `${name}: and the run is not a pass`)
+      } finally {
+        if (cleanup !== undefined) await cleanup()
+      }
+    })
+  }
+})
+
+test('an entry that was never a runbook is not counted as a document nobody linted', async () => {
+  await withRoot(async (base) => {
+    const root = join(base, 'runbooks')
+    const outside = join(base, 'outside')
+    await mkdir(root)
+    await mkdir(outside)
+    await writeFile(join(root, 'good.md'), STEP)
+    await writeFile(join(outside, 'notes.txt'), 'not a runbook')
+    await symlink(join(outside, 'notes.txt'), join(root, 'notes.txt'))
+
+    const report = await lintRunbooks({ root })
+    assert.equal(ruleIds(report).includes('path-escapes-root'), true, 'it is still refused and reported')
+    assert.equal(report.summary.documents, 1, 'but a .txt was never a document this tool would lint')
+    assert.equal(report.summary.skipped, 0)
+  })
+})
+
 test('maxDocuments stops the scan with a named finding and an incomplete run', async () => {
   await withRoot(async (root) => {
     await writeFile(join(root, 'a.md'), STEP)
@@ -375,7 +457,9 @@ test('maxDocuments stops the scan with a named finding and an incomplete run', a
     const bounded = await lintRunbooks({ root, limits: { maxDocuments: 1 } })
     assert.equal(ruleIds(bounded).includes('too-many-documents'), true)
     assert.equal(bounded.status, 'incomplete')
-    assert.equal(bounded.summary.documents, 1)
+    assert.equal(bounded.summary.checked, 1, 'one document was linted')
+    assert.equal(bounded.summary.documents, 2, 'and the one the cut-off stopped at was found')
+    assert.equal(bounded.summary.skipped, 1)
 
     const whole = await lintRunbooks({ root, limits: { maxDocuments: 2 } })
     assert.equal(whole.status, 'pass', 'the same tree inside the limit passes, so the limit is what stopped it')

@@ -65,6 +65,19 @@ function isRecord(value) {
 }
 
 /**
+ * Whether an entry name is one this tool would lint.
+ *
+ * One definition, used both to decide what to collect and to decide what an
+ * entry refused before collection was: a refused `notes.txt` was never a
+ * runbook, and reporting it as a document nobody linted would be a second
+ * untruth on top of the refusal.
+ */
+function isDocumentName(name) {
+  if (!DOCUMENT_EXTENSIONS.includes(extname(name).toLowerCase())) return false
+  return !SKIPPED_FILENAMES.includes(name.toLowerCase())
+}
+
+/**
  * Containment, decided on real paths.
  *
  * Refusing `../` and absolute strings is not confinement: a symbolic link
@@ -101,7 +114,10 @@ export function validateStepLevel(level) {
 }
 
 function createCollector() {
-  return { rows: [], incomplete: false }
+  // `skipped` counts documents that were found and not linted -- including the
+  // ones refused before they could be collected, which are invisible in
+  // `files` and were previously invisible in the report as well.
+  return { rows: [], incomplete: false, skipped: 0 }
 }
 
 function record(collector, row) {
@@ -170,6 +186,7 @@ async function collectDocuments(rootReal, limits, collector) {
           message: `Entry could not be resolved: ${error.code ?? 'unknown error'}.`,
         })
         collector.incomplete = true
+        if (isDocumentName(entry.name)) collector.skipped += 1
         continue
       }
 
@@ -182,6 +199,7 @@ async function collectDocuments(rootReal, limits, collector) {
           message: 'Entry resolves outside the runbook root and was refused; its content was never read.',
           suggestion: 'Move the runbook inside the root, or lint the other location separately.',
         })
+        if (isDocumentName(entry.name)) collector.skipped += 1
         continue
       }
       if (visited.has(realPath)) continue
@@ -192,8 +210,7 @@ async function collectDocuments(rootReal, limits, collector) {
         await walk(realPath, childRelative, depth + 1)
         continue
       }
-      if (!DOCUMENT_EXTENSIONS.includes(extname(entry.name).toLowerCase())) continue
-      if (SKIPPED_FILENAMES.includes(entry.name.toLowerCase())) continue
+      if (!isDocumentName(entry.name)) continue
 
       // An entry named like a runbook that is not a regular file -- a FIFO, a
       // socket, a device node -- cannot be read as one, and reading from it
@@ -209,6 +226,7 @@ async function collectDocuments(rootReal, limits, collector) {
           suggestion: 'Remove the entry, or replace it with a regular Markdown file.',
         })
         collector.incomplete = true
+        collector.skipped += 1
         continue
       }
 
@@ -220,6 +238,7 @@ async function collectDocuments(rootReal, limits, collector) {
           suggestion: 'Raise --max-documents or lint a smaller subtree.',
         })
         collector.incomplete = true
+        collector.skipped += 1
         stopped = true
         return
       }
@@ -378,8 +397,11 @@ export async function lintRunbooks(options = {}) {
   const files = await collectDocuments(rootReal, limits, collector)
 
   const counts = {
-    documents: files.length,
-    skipped: 0,
+    // Everything found as a runbook: the documents collected, plus the ones
+    // refused before collection. A run that refused an entry and reported
+    // `documents: 1, skipped: 0` hid the very entry that made it incomplete.
+    documents: files.length + collector.skipped,
+    skipped: collector.skipped,
     checked: 0,
     steps: 0,
     fences: 0,

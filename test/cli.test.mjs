@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { access, constants, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, constants, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -155,6 +155,51 @@ test('an unreadable input exits 2 WITH an incomplete report on stdout', async ()
     assert.equal(report.status, 'incomplete', 'a consumer needs the report to know which input was not read')
     assert.equal(report.findings.some((finding) => finding.ruleId === 'document-not-utf8'), true)
     assert.equal(result.stderr.includes('incomplete:'), true)
+  })
+})
+
+/**
+ * The stderr diagnostic is the only place a human is told how much of the run
+ * was not done. It counted only documents that failed to load, so a run made
+ * incomplete by an entry refused before collection announced "0 document(s)
+ * were not linted out of 1 found" -- a self-contradiction, and the one entry
+ * that mattered invisible in both numbers.
+ */
+test('the incomplete diagnostic names the entry that was not linted', async () => {
+  await withRoot(async (root) => {
+    await writeFile(join(root, 'good.md'), STEP)
+    await symlink(join(root, 'nothing-here.md'), join(root, 'dangling.md'))
+
+    const result = await cli(['--root', root, '--json'])
+    assert.equal(result.code, 2)
+
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.skipped, 1)
+    assert.equal(report.summary.documents, 2)
+    assert.equal(
+      result.stderr.includes('1 document(s) of 2 found were not linted'),
+      true,
+      `the diagnostic hides the entry that made the run incomplete: ${result.stderr}`,
+    )
+    assert.equal(result.stderr.includes('1 step(s) of 1 found were read'), true)
+    assert.equal(result.stdout.includes('incomplete:'), false, 'and it stays off stdout')
+  })
+})
+
+test('the incomplete diagnostic counts steps too, for a run where every document was linted', async () => {
+  await withRoot(async (root) => {
+    const padded = STEP.replace('- **Recovery:**', `${'filler\n'.repeat(20)}- **Recovery:**`)
+    await writeFile(join(root, 'long.md'), padded)
+
+    const result = await cli(['--root', root, '--json', '--max-step-lines', '5'])
+    assert.equal(result.code, 2)
+    assert.equal(result.stderr.includes('0 document(s) of 1 found were not linted'), true)
+    assert.equal(
+      result.stderr.includes('0 step(s) of 1 found were read'),
+      true,
+      `a cut-short step leaves every document linted, so the step counts are what say so: ${result.stderr}`,
+    )
   })
 })
 

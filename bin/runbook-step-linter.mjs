@@ -124,8 +124,13 @@ async function main(argv) {
   process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report))
 
   if (report.status === 'incomplete') {
+    // Both counts, because either one alone can look complete on its own: a
+    // step cut short leaves every document linted, and a subtree nobody could
+    // read leaves every step that was found read. The findings say which.
+    const { checked, documents, skipped, steps } = report.summary
     process.stderr.write(
-      `incomplete: ${report.summary.skipped} document(s) were not linted out of ${report.summary.documents} found.\n`,
+      `incomplete: ${skipped} document(s) of ${documents} found were not linted, ` +
+      `and ${checked} step(s) of ${steps} found were read. The findings say what was not examined.\n`,
     )
     return 2
   }

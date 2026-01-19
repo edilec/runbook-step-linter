@@ -181,6 +181,12 @@ The report follows the Edilec tool report contract v1.
 - `summary` carries `checked`, `errors`, `warnings`, `info`, `documents`, `skipped`, `steps`,
   `fencedCommands`, `looseCommands`, `stepsWithOwner`, `stepsWithPrerequisites`,
   `stepsWithExpectedOutput` and `stepsWithRecovery`.
+- `documents` is how many documents were **found**: the ones collected and linted plus the ones
+  refused before they could be collected. `skipped` is how many of those were **not linted** — a
+  document that was too large, undecodable or unopenable, an entry refused for resolving outside the
+  root, one that is not a regular file, one that could not be resolved at all, and the entry a
+  document-count cut-off stopped at. An entry this tool would never have linted — a `.txt`, an
+  `index.md` — is not counted in either: it was never a document.
 - `steps` is how many steps were **found**; `checked` is how many were **read to the end**. They
   differ when a limit cut a step short: such a step is counted in `steps`, reported as
   `step-too-long`, and left out of `checked`, because nothing is known about the part that was never
@@ -207,6 +213,11 @@ The report follows the Edilec tool report contract v1.
 | 1 | the runbook set failed the check | the report |
 | 2 | invalid usage or configuration | **empty** — the message is on stderr |
 | 2 | evidence missing, undecodable or bounded out | an `incomplete` report |
+
+An `incomplete` run also writes a diagnostic to stderr naming both counts — documents not linted out
+of documents found, and steps read out of steps found — because either pair can look complete on its
+own: a step cut short leaves every document linted, and a subtree nobody could read leaves every
+step that was found read.
 
 A run that linted no step is `incomplete`, never a pass. `pass` with `checked: 0` is green on no
 evidence, so `no-documents-found` is emitted and the run is marked incomplete on that path. The
