@@ -169,7 +169,9 @@ removed. Exceeding a limit is always an explicit finding and an `incomplete` rep
 silently shorter answer, and never a pass.
 
 An unknown limit name, an unknown option key, an out-of-range `--step-level`, an unknown CLI option
-and a value-carrying CLI flag given more than once are all refused as configuration errors. A
+and a value-carrying CLI flag given more than once are all refused as configuration errors. So is a
+`limits` that is present but not an object: `null` is a value the caller computed and lost, not an
+omission, and only an absent `limits` means "use the defaults". A
 one-character typo must not quietly turn a real failure into a green run, and neither must a value
 the caller can no longer see: `--root a --root b` is refused rather than resolved by last-wins.
 

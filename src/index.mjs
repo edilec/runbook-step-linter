@@ -92,6 +92,14 @@ export function isInside(root, candidate) {
   return candidate.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)
 }
 
+/**
+ * Only an absent `limits` means "use the defaults". `null` is a value the
+ * caller computed and lost, not an omission, and accepting it as `{}` is the
+ * same silent ignore this tool refuses everywhere else: an unknown limit name,
+ * a misspelled option key and a fractional limit are all errors, so a limits
+ * object that turned out to be null cannot be the one thing that is waved
+ * through.
+ */
 export function validateLimits(overrides = {}) {
   if (!isRecord(overrides)) throw new TypeError('Limits must be an object')
   const limits = { ...DEFAULT_LIMITS }
@@ -339,7 +347,7 @@ export function lintRunbookText(text, options = {}) {
   for (const key of Object.keys(options)) {
     if (!TEXT_OPTIONS.includes(key)) throw new TypeError(`Unknown option "${key}"`)
   }
-  const limits = validateLimits(options.limits ?? {})
+  const limits = validateLimits(options.limits)
   const stepLevel = validateStepLevel(options.stepLevel)
   const file = options.file === undefined ? 'runbook.md' : options.file
   if (typeof file !== 'string' || file.trim() === '') throw new TypeError('File label must be a non-empty string')
@@ -381,7 +389,7 @@ export async function lintRunbooks(options = {}) {
   if (typeof options.root !== 'string' || options.root.trim() === '') {
     throw new TypeError('A runbook root is required')
   }
-  const limits = validateLimits(options.limits ?? {})
+  const limits = validateLimits(options.limits)
   const stepLevel = validateStepLevel(options.stepLevel)
 
   let rootReal

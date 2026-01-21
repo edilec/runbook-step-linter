@@ -358,6 +358,8 @@ test('the report envelope matches the Edilec report contract', () => {
 test('lintRunbookText refuses an unknown option instead of ignoring it', () => {
   assert.throws(() => lintRunbookText('## 1. a\n', { stepLevl: 3 }), /Unknown option "stepLevl"/)
   assert.throws(() => lintRunbookText('## 1. a\n', { limits: { maxStep: 2 } }), /Unknown limit "maxStep"/)
+  assert.throws(() => lintRunbookText('## 1. a\n', { limits: null }), /Limits must be an object/)
+  assert.throws(() => lintRunbookText('## 1. a\n', { limits: [] }), /Limits must be an object/)
   assert.throws(() => lintRunbookText('## 1. a\n', { stepLevel: 9 }), /between 1 and 6/)
   assert.throws(() => lintRunbookText(Buffer.from('x')), /must be a string/)
 })

@@ -645,6 +645,12 @@ test('lintRunbooks refuses configuration it cannot honour', async () => {
     await writeFile(join(root, 'drain.md'), STEP)
     await assert.rejects(() => lintRunbooks({ root, roots: root }), /Unknown option "roots"/)
     await assert.rejects(() => lintRunbooks({ root, limits: { maxStep: 1 } }), /Unknown limit "maxStep"/)
+    // `null` is a value the caller computed and lost, not an omission. An array
+    // was already refused here; these two must not disagree.
+    await assert.rejects(() => lintRunbooks({ root, limits: null }), /Limits must be an object/)
+    await assert.rejects(() => lintRunbooks({ root, limits: [] }), /Limits must be an object/)
+    await assert.rejects(() => lintRunbooks({ root, limits: 5 }), /Limits must be an object/)
+    assert.equal((await lintRunbooks({ root, limits: undefined })).status, 'pass', 'an absent limits object is an omission')
     await assert.rejects(() => lintRunbooks({ root, limits: { maxSteps: 0 } }), /positive integer/)
     await assert.rejects(() => lintRunbooks({ root, stepLevel: 0 }), /between 1 and 6/)
     await assert.rejects(() => lintRunbooks({ root: join(root, 'missing') }), /could not be read/)
