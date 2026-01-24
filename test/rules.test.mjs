@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { lintRunbookText } from '../src/index.mjs'
+import { formatReport, lintRunbookText } from '../src/index.mjs'
 import { RULE_SEVERITY, createFinding, isPlaceholder, sortRows } from '../src/rules.mjs'
 
 const LINE_SEPARATOR = String.fromCharCode(0x2028)
@@ -256,6 +256,30 @@ test('createFinding throws on a rule that nobody pinned a severity for', () => {
     /not in RULE_SEVERITY/,
   )
   assert.equal(createFinding({ ruleId: 'step-recovery-missing', message: 'x', file: 'a.md', pointer: '/', line: 0 }).severity, 'error')
+})
+
+/**
+ * Defect class: an off-by-one on a field's presence. `line` is documented as
+ * the 1-based line in the document, and a document-level finding has no line
+ * at all -- it is about the document, not a place in it. Relaxing the guard to
+ * `>= 0` puts `line: 0` in the JSON and `a.md:0/` in the human report, which
+ * names a line that cannot exist.
+ */
+test('a finding with no line carries no line field, and no line in the human report', () => {
+  const row = { ruleId: 'no-steps-found', message: 'x', file: 'a.md', pointer: '/', line: 0 }
+  const finding = createFinding(row)
+  assert.equal(Object.hasOwn(finding, 'line'), false, 'line 0 is not a line')
+  assert.equal(JSON.stringify(finding).includes('"line"'), false)
+  assert.equal(createFinding({ ...row, line: 1 }).line, 1, 'and the first real line is kept')
+
+  const report = lintRunbookText('# Not a runbook\n\nJust prose.\n', { file: 'a.md' })
+  const documentLevel = report.findings.filter((item) => item.ruleId === 'no-steps-found')
+  assert.equal(documentLevel.length, 1)
+  assert.equal(Object.hasOwn(documentLevel[0], 'line'), false)
+
+  const human = formatReport(report)
+  assert.equal(human.includes('a.md/ no-steps-found'), true, `the place reads as the document itself: ${human}`)
+  assert.equal(human.includes('a.md:0'), false, 'a line 0 in a human report names a line that does not exist')
 })
 
 test('createFinding sanitises identifiers and paths, not only evidence', () => {

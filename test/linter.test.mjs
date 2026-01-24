@@ -486,6 +486,30 @@ test('maxDocumentBytes refuses to parse an oversized document', async () => {
   })
 })
 
+/**
+ * Defect class: a limit whose boundary nobody pinned. `>` and `>=` differ by
+ * exactly one byte, and the difference decides whether a document sitting on
+ * the limit is linted or refused unread. The documented reading is "above the
+ * limit": a document of exactly maxDocumentBytes is inside it.
+ */
+test('maxDocumentBytes admits a document of exactly the limit and refuses one byte more', async () => {
+  await withRoot(async (root) => {
+    const exact = Buffer.byteLength(STEP)
+    await writeFile(join(root, 'exact.md'), STEP)
+
+    const onTheLimit = await lintRunbooks({ root, limits: { maxDocumentBytes: exact } })
+    assert.equal(ruleIds(onTheLimit).includes('document-too-large'), false, 'a document of exactly the limit is inside it')
+    assert.equal(onTheLimit.summary.checked, 1)
+    assert.equal(onTheLimit.status, 'pass')
+
+    const oneShort = await lintRunbooks({ root, limits: { maxDocumentBytes: exact - 1 } })
+    assert.equal(ruleIds(oneShort).includes('document-too-large'), true, 'one byte over it is not')
+    assert.equal(oneShort.summary.checked, 0)
+    assert.equal(oneShort.summary.skipped, 1)
+    assert.equal(oneShort.status, 'incomplete')
+  })
+})
+
 test('maxDepth stops the walk with a named finding and an incomplete run', async () => {
   await withRoot(async (root) => {
     const nested = join(root, 'one', 'two')

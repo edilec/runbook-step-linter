@@ -333,6 +333,26 @@ test('parseRunbook marks a step truncated at maxStepLines and stops extracting f
   assert.equal(whole.steps[0].fields.length, 1)
 })
 
+/**
+ * The same boundary question one level down: a step body of exactly
+ * maxStepLines has not exceeded it, and the field on its last line is still
+ * read. `>=` here would truncate a step that fits, and report step-too-long
+ * about a step nothing was wrong with.
+ */
+test('maxStepLines admits a body of exactly the limit and truncates at one line more', () => {
+  const body = ['line 0', 'line 1', 'line 2', 'line 3', 'Owner: platform-oncall']
+  const text = ['## 1. a', ...body].join('\n')
+
+  const onTheLimit = parseRunbook(text, { maxStepLines: body.length })
+  assert.equal(onTheLimit.steps[0].bodyLines, body.length, 'the fixture really does sit on the limit')
+  assert.equal(onTheLimit.steps[0].truncated, false, 'a body of exactly the limit has not exceeded it')
+  assert.equal(onTheLimit.steps[0].fields.length, 1, 'and its last line was read')
+
+  const oneOver = parseRunbook(text, { maxStepLines: body.length - 1 })
+  assert.equal(oneOver.steps[0].truncated, true)
+  assert.equal(oneOver.steps[0].fields.length, 0, 'nothing after the limit is read')
+})
+
 test('parseRunbook tolerates CRLF line endings and a byte order mark', () => {
   const text = `﻿## 1. Cordon\r\n\r\nOwner: platform-oncall\r\n`
   const parsed = parseRunbook(text)
