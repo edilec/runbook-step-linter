@@ -7,6 +7,7 @@ import test from 'node:test'
 
 import {
   DEFAULT_LIMITS,
+  byCodeUnit,
   formatReport,
   isInside,
   lintRunbookText,
@@ -632,10 +633,15 @@ test('findings are ordered by file whatever order the filesystem returned', asyn
       await writeFile(join(root, name), '## 1. Do it\n\nnothing\n')
     }
     const report = await lintRunbooks({ root })
-    const files = [...new Set(report.findings.map((finding) => finding.location.file))]
+    const emitted = report.findings.map((finding) => finding.location.file)
+    const files = [...new Set(emitted)]
 
     assert.deepEqual(files, ['alpha.md', 'mike.md', 'zulu.md'])
-    assert.notDeepEqual(files, ['zulu.md', 'alpha.md', 'mike.md'])
+    // Every finding, not only the first one from each document: a sort that
+    // ordered by line before file would interleave the three documents and
+    // still leave the distinct list above in the right order.
+    assert.deepEqual(emitted, [...emitted].sort(byCodeUnit), 'the findings of one document are not contiguous')
+    assert.equal(emitted.length, 12, 'four findings from each of the three documents')
   })
 })
 

@@ -388,8 +388,27 @@ test('lintRunbookText refuses an unknown option instead of ignoring it', () => {
   assert.throws(() => lintRunbookText(Buffer.from('x')), /must be a string/)
 })
 
-test('every rule id used anywhere in this suite is a rule the table knows', () => {
+/**
+ * This assertion used to be unreachable. It walked the rule ids of a report and
+ * checked each one was in the table -- but a report is built by
+ * `sortRows(rows).map(createFinding)`, and createFinding throws on an unpinned
+ * id, so an unpinned rule blew up while the report was being built and the loop
+ * never ran. It could not fail; it could only never be reached.
+ *
+ * What it was reaching for is the guarantee below: an unpinned rule id cannot
+ * reach a report, because the expression that builds one refuses it rather than
+ * defaulting to a severity.
+ */
+test('a rule id the table does not pin cannot reach a report at all', () => {
+  const row = { file: 'a.md', line: 1, pointer: '/', ruleId: 'invented-rule', message: 'm' }
+  assert.throws(
+    () => sortRows([row]).map(createFinding),
+    /Rule "invented-rule" is not in RULE_SEVERITY/,
+    'the report-building expression must refuse an unpinned id, not default it',
+  )
+
   const report = lintRunbookText('## 1. Do it\n\nnothing\n', { file: 'a.md' })
+  assert.equal(ids(report).length > 0, true, 'and a real report still builds')
   for (const ruleId of ids(report)) {
     assert.equal(Object.hasOwn(RULE_SEVERITY, ruleId), true, `${ruleId} is emitted but unpinned`)
   }
