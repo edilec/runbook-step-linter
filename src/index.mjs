@@ -454,7 +454,7 @@ export async function lintRunbooks(options = {}) {
     record(collector, {
       ...ROOT_LOCATION,
       ruleId: 'no-documents-found',
-      message: `No runbook step was linted, so this run checked nothing. ${files.length} candidate document(s) were found.`,
+      message: `No runbook step was linted, so this run checked nothing. ${counts.documents} document(s) were found, ${counts.skipped} of them not linted.`,
       suggestion: 'Point --root at the directory that holds the runbooks, or set --step-level to the heading level they use.',
     })
     collector.incomplete = true
