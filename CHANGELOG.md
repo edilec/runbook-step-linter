@@ -31,7 +31,15 @@ All notable changes to this project are documented in this file.
   inside a symlinked root is still linted;
 - sanitisation of every untrusted string that reaches output — file paths, step
   headings, field labels, values and command excerpts — so an identifier
-  carrying a newline cannot forge extra lines in the human report;
+  carrying a newline cannot forge extra lines in the human report; the removed
+  set is C0, DEL, the whole C1 range (where `U+0085` NEL and the 8-bit CSI
+  `U+009B` live), `U+2028`, `U+2029` and the bidi formatting characters, whose
+  `U+202E` would otherwise reverse everything displayed after it;
+- a summary that separates what was found from what was read: `documents`
+  counts the documents found, including the ones refused before they could be
+  collected, `skipped` counts those of them that were not linted, `steps`
+  counts the steps found and `checked` counts the steps read to the end — a
+  step a limit cut short is found, reported, and not counted as checked;
 - a CLI with `--help`, `--json`, `--step-level` and the limit flags, the report
   on stdout, diagnostics on stderr, and exit codes 0 / 1 / 2 — with an empty
   stdout for a configuration error and an `incomplete` report for evidence that
@@ -56,11 +64,18 @@ All notable changes to this project are documented in this file.
   is a near miss for the real one.
 - A run that linted no step is `incomplete` and exits 2. `pass` with
   `checked: 0` is not reachable.
-- Every finding takes its severity from one frozen `ruleId -> severity` table; an
-  unknown rule id throws, the table is asserted against the documented catalog in
-  both directions, and every severity is additionally pinned rule by rule, so
-  downgrading a rule in both the table and the catalog is still caught.
-- No wall clock, locale, `localeCompare`, random source, network access or
-  filesystem enumeration order affects the output.
+- Every finding takes its severity from one frozen `ruleId -> severity` table and
+  an unknown rule id throws. The table, the documented catalog and a hand-written
+  copy are asserted against each other, but a coordinated edit to three
+  declarations agrees with itself, so severity is pinned by consequence as well:
+  every rule whose severity alone decides the verdict is driven through the real
+  binary on a root that isolates it, and the report status and the process exit
+  code are asserted. A demotion turns `fail` into `pass` and exit 1 into exit 0,
+  which no edit to a declaration can hide.
+- No wall clock, locale, `localeCompare`, `Intl.Collator`, random source, network
+  access or filesystem enumeration order affects the output. Ordering is pinned
+  by the order the report emits for pairs that a collator orders the other way —
+  `URLS.md` before `URL_ENTRIES.md`, `Zebra.md` before `apple.md`, `a-b` before
+  `a_b` — rather than by scanning the source for a comparator's name.
 
 No release has been published.
