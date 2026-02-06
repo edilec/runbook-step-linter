@@ -101,8 +101,9 @@ console.log(formatReport(report))
 const single = lintRunbookText(markdown, { file: 'drain-a-node.md' })
 ```
 
-An unknown option key, an unknown limit name and an out-of-range step level all throw rather than
-being ignored.
+An unknown option key, an unknown limit name, an out-of-range step level and a `limits` that is
+present but not an object all throw rather than being ignored. Only an absent `limits` means "use
+the defaults".
 
 ## Exit codes
 
@@ -126,8 +127,10 @@ started would be worse.
 - **`pass` with `checked: 0` is unreachable.** A run that linted no step is `incomplete`.
 - **Every limit is enforced where it is documented**, and exceeding one is an explicit finding with
   an `incomplete` report, never a silent truncation.
-- **Every finding's severity comes from one frozen table.** An unknown rule id throws; the table is
-  asserted against the documented catalog in both directions and pinned again rule by rule.
+- **Every finding's severity comes from one frozen table.** An unknown rule id throws rather than
+  defaulting to anything. The table is asserted against the documented catalog in both directions,
+  and — because declarations that agree with each other can be edited together — every severity that
+  decides the verdict is pinned by running the binary and asserting the exit code.
 - **Containment is decided on real paths, both sides.** A symlink escaping the root is refused; a
   file genuinely inside a symlinked root is still linted.
 - **Every untrusted string reaching output is sanitised** — paths, headings, labels and excerpts, not
