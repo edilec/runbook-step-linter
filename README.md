@@ -25,8 +25,10 @@ Nothing is fetched over a network, and no runbook is ever written to. There is n
 ## Install
 
 ```sh
-npm install runbook-step-linter
+npm install github:edilec/runbook-step-linter
 ```
+
+This installs the public GitHub source; `runbook-step-linter` is not published to npm.
 
 Or run it from a checkout with no install at all:
 
@@ -37,9 +39,9 @@ node bin/runbook-step-linter.mjs --root docs/runbooks
 ## Use
 
 ```sh
-runbook-step-linter --root docs/runbooks
-runbook-step-linter --root docs/runbooks --json
-runbook-step-linter --root docs/runbooks --step-level 3 --max-steps 40
+npx runbook-step-linter --root docs/runbooks
+npx runbook-step-linter --root docs/runbooks --json
+npx runbook-step-linter --root docs/runbooks --step-level 3 --max-steps 40
 ```
 
 The human summary goes to stdout; `--json` replaces it with the machine-readable report. Diagnostics
